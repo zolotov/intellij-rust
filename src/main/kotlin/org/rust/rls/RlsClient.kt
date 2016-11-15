@@ -10,24 +10,29 @@ import com.intellij.openapi.util.Key
 class RlsClient(
     var process: OSProcessHandler
 ) : Disposable {
-    companion object {
 
+    init {
+        process.addProcessListener(MyProcessListener())
+    }
+
+    companion object {
         fun spawn(commandLine: String, projectRoot: String): RlsClient {
             val cmd = GeneralCommandLine(commandLine.split(" "))
                 .withEnvironment("RUST_LOG", "rls=trace")
 
             val process = OSProcessHandler(cmd)
-            process.addProcessListener(object : ProcessAdapter() {
-                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>?) {
-                    println("> ${event.text}")
-                }
-            })
-
             val result = RlsClient(process)
             result.call(1, "initialize", """{"processId": 92, "rootPath": "$projectRoot"}""")
             result.process.startNotify()
             return result
         }
+
+        private fun extractJson(line: String): String? {
+            val start = line.indexOf('{')
+            if (start == -1) return null
+            return line.substring(start).trim()
+        }
+
     }
 
     fun call(id: Int, method: String, params_json: String) {
@@ -46,7 +51,14 @@ class RlsClient(
     }
 
     override fun dispose() {
-//        process.destroyProcess()
+        process.destroyProcess()
+    }
+
+    private inner class MyProcessListener : ProcessAdapter() {
+        override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>?) {
+            val text = extractJson(event.text) ?: return
+            log("Recv $text")
+        }
     }
 
     private fun log(s: String) = println(s)
@@ -55,10 +67,10 @@ class RlsClient(
 fun main(args: Array<String>) {
     val rlsPath = "cargo run --manifest-path /home/user/projects/rls/Cargo.toml"
     val projectPath = "/home/user/hello"
+    println("A")
     val rls = RlsClient.spawn(rlsPath, projectPath)
+    println("B")
     try {
-        work(rls)
-        rls.process.waitFor()
     } finally {
         rls.dispose()
     }
