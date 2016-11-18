@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
@@ -49,32 +50,30 @@ interface RlsProtocolListener {
  * Handles communication with RLS. All methods should be called from a single thread.
  */
 class RlsProtocol(
-    private val process: OSProcessHandler,
+    cmd: GeneralCommandLine,
     private val listener: RlsProtocolListener
 ) {
+    val process: OSProcessHandler
+
 
     init {
+        process = ContentLengthDelimitedProcessHandler(cmd) { frame ->
+            val json = checkNotNull(extractJson(frame)) {
+                "RLS produced malformed JSON"
+            }
+            log("Recv $json")
+
+            val method = json["method"]?.asString
+            if (method != null) {
+                val params = json["params"]!!
+                dispatch(method, params)
+            }
+        }
+
         process.addProcessListener(object : ProcessAdapter() {
             override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>?) {
-                when (outputType) {
-                    ProcessOutputTypes.STDERR -> {
-                        log("Err ${event.text}")
-                    }
-
-                    ProcessOutputTypes.STDOUT -> {
-                        val json = extractJson(event.text)
-                        if (json == null) {
-                            log("Out ${event.text}")
-                            return
-                        }
-                        log("Recv $json")
-
-                        val method = json["method"]?.asString
-                        if (method != null) {
-                            val params = json["params"]!!
-                            dispatch(method, params)
-                        }
-                    }
+                if (outputType == ProcessOutputTypes.STDERR) {
+                    log("Err ${event.text}")
                 }
             }
         })

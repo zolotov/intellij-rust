@@ -28,9 +28,9 @@ class RlsConnection(
         val cmd = GeneralCommandLine(rlsExecutablePath.split(" "))
             .withWorkDirectory(projectRoot)
             .withEnvironment("RUST_LOG", "rls=trace")
-        process = OSProcessHandler(cmd)
 
-        val protocol = RlsProtocol(process, ProtocolListener())
+        val protocol = RlsProtocol(cmd, ProtocolListener())
+        process = protocol.process
         protocol.call(1, "initialize", """{"processId": 92, "rootPath": "$projectRoot"}""")
         process.startNotify()
     }
