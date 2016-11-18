@@ -439,6 +439,10 @@
         <codeInsight.template.postfixTemplateProvider language="Rust"
                                                       implementationClass="org.rust.ide.template.postfix.RustPostfixTemplateProvider"/>
 
+
+        <moduleService serviceInterface="org.rust.rls.RustLanguageServer"
+                       serviceImplementation="org.rust.rls.impl.RustLanguageServerImpl"/>
+
     </extensions>
 
     <application-components>

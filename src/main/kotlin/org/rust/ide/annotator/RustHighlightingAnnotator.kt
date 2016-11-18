@@ -2,21 +2,39 @@ package org.rust.ide.annotator
 
 import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.Annotator
+import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiElement
+import org.rust.cargo.util.getService
 import org.rust.ide.colors.RustColor
 import org.rust.ide.highlight.RustHighlighter
 import org.rust.lang.core.psi.*
 import org.rust.lang.core.psi.impl.mixin.isMut
 import org.rust.lang.core.psi.util.elementType
+import org.rust.lang.core.psi.util.module
 import org.rust.lang.core.psi.util.parentOfType
 import org.rust.lang.core.psi.visitors.RustComputingVisitor
 import org.rust.lang.core.types.util.isPrimitive
 import org.rust.lang.core.types.visitors.impl.RustTypificationEngine
+import org.rust.rls.ErrorInfo
+import org.rust.rls.RustLanguageServer
+
+private val RLS_ANNOTATIONS_HANDLED: Key<Boolean> = Key.create("RLS_ANNOTATIONS_HANDLED")
 
 // Highlighting logic here should be kept in sync with tags in RustColorSettingsPage
 class RustHighlightingAnnotator : Annotator {
-
     override fun annotate(element: PsiElement, holder: AnnotationHolder) {
+        if (holder.isBatchMode) return
+        val rlsApi = element.module?.getService<RustLanguageServer>()
+
+        val session = holder.currentAnnotationSession
+        val vFile = element.containingFile?.virtualFile ?: return
+        if (rlsApi != null && session.getUserData(RLS_ANNOTATIONS_HANDLED) != true) {
+            println("RLS highlighing")
+            session.putUserData(RLS_ANNOTATIONS_HANDLED, true)
+            rlsApi.updateChangedFiles()
+            applyRlsHighlighting(rlsApi.errorsForFile(vFile), holder)
+        }
+
         val highlightingInfo =
             // TODO(XXX): Much better would be to incorporate
             //            that behaviour into visitor
@@ -77,27 +95,38 @@ class RustHighlightingAnnotator : Annotator {
             }
         }
 
-        override fun visitEnumItem(o: RustEnumItemElement)       = highlight(o.identifier, RustColor.ENUM)
+        override fun visitEnumItem(o: RustEnumItemElement) = highlight(o.identifier, RustColor.ENUM)
         override fun visitEnumVariant(o: RustEnumVariantElement) = highlight(o.identifier, RustColor.ENUM_VARIANT)
 
-        override fun visitStructItem(o: RustStructItemElement)   = highlight(o.identifier, RustColor.STRUCT)
-        override fun visitTraitItem(o: RustTraitItemElement)     = highlight(o.identifier, RustColor.TRAIT)
+        override fun visitStructItem(o: RustStructItemElement) = highlight(o.identifier, RustColor.STRUCT)
+        override fun visitTraitItem(o: RustTraitItemElement) = highlight(o.identifier, RustColor.TRAIT)
         override fun visitModDeclItem(o: RustModDeclItemElement) = highlight(o.identifier, RustColor.MODULE)
-        override fun visitModItem(o: RustModItemElement)         = highlight(o.identifier, RustColor.MODULE)
+        override fun visitModItem(o: RustModItemElement) = highlight(o.identifier, RustColor.MODULE)
 
-        override fun visitFieldDecl(o: RustFieldDeclElement)     = highlight(o.identifier, RustColor.FIELD)
+        override fun visitFieldDecl(o: RustFieldDeclElement) = highlight(o.identifier, RustColor.FIELD)
 
         override fun visitExternCrateItem(o: RustExternCrateItemElement) = highlight(o.identifier, RustColor.CRATE)
 
         override fun visitMacroInvocation(m: RustMacroInvocationElement) = highlight(m, RustColor.MACRO)
-        override fun visitMethodCallExpr(o: RustMethodCallExprElement)   = highlight(o.identifier, RustColor.INSTANCE_METHOD)
-        override fun visitFnItem(o: RustFnItemElement)                   = highlight(o.identifier, RustColor.FUNCTION_DECLARATION)
+        override fun visitMethodCallExpr(o: RustMethodCallExprElement) = highlight(o.identifier, RustColor.INSTANCE_METHOD)
+        override fun visitFnItem(o: RustFnItemElement) = highlight(o.identifier, RustColor.FUNCTION_DECLARATION)
 
         override fun visitImplMethodMember(o: RustImplMethodMemberElement) =
             highlight(o.identifier, if (o.isStatic) RustColor.STATIC_METHOD else RustColor.INSTANCE_METHOD)
+
         override fun visitTraitMethodMember(o: RustTraitMethodMemberElement) =
             highlight(o.identifier, if (o.isStatic) RustColor.STATIC_METHOD else RustColor.INSTANCE_METHOD)
 
         override fun visitSelfArgument(o: RustSelfArgumentElement) = highlight(o.self, RustColor.SELF_PARAMETER)
+    }
+}
+
+private fun applyRlsHighlighting(errors: List<ErrorInfo>, holder: AnnotationHolder) {
+    println("Applying errors $errors")
+    val document = holder.currentAnnotationSession.file.viewProvider.document ?: return
+    for (error in errors) {
+        val textRange = error.textRange(document)
+        println("textRange = ${textRange}")
+        holder.createErrorAnnotation(textRange, error.message)
     }
 }
