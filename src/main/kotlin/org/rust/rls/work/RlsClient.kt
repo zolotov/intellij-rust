@@ -38,6 +38,22 @@ data class LspPosition(
     val character: Int
 )
 
+data class LspVersionedTextDocumentIdentifier(
+    val uri: String,
+    val version: Long
+)
+
+data class LspTextDocumentContentChangeEvent(
+    val range: LspRange?,
+    val rangeLength: Int?,
+    val text: String
+)
+
+data class LspDidChangeTextDocumentParams(
+    val textDocument: LspVersionedTextDocumentIdentifier,
+    val contentChanges: List<LspTextDocumentContentChangeEvent>
+)
+
 private val GSON = Gson()
 
 interface RlsProtocolListener {
@@ -79,6 +95,22 @@ class RlsProtocol(
         })
     }
 
+    fun callInitialize(projectPath: String) {
+        call("initialize", """{"processId": 92, "rootPath": "$projectPath"}""")
+    }
+
+    fun notifyTextDocumentDidChange(path: String, version: Long, newContent: String) {
+        val params = LspDidChangeTextDocumentParams(
+            LspVersionedTextDocumentIdentifier("file://$path", version),
+            listOf(LspTextDocumentContentChangeEvent(
+                null,
+                null,
+                newContent
+            ))
+        )
+        call("textDocument/didChange", GSON.toJson(params))
+    }
+
     private inline fun <reified T : Any> handle(params: JsonElement, f: (T) -> Unit) {
         val arg: T = GSON.fromJson(params, T::class.java)
         f(arg)
@@ -91,8 +123,9 @@ class RlsProtocol(
         }
     }
 
-    fun call(id: Int, method: String, params_json: String) {
-        write("""{ "jsonrpc": "2.0", "id": $id, "method": "$method", "params": $params_json } """)
+    private var requestN: Int = 0
+    private fun call(method: String, paramsJson: String) {
+        write("""{ "jsonrpc": "2.0", "id": ${requestN++}, "method": "$method", "params": $paramsJson } """)
     }
 
     private fun extractJson(line: String): JsonObject? {

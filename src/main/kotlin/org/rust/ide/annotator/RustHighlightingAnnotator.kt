@@ -29,7 +29,6 @@ class RustHighlightingAnnotator : Annotator {
         val session = holder.currentAnnotationSession
         val vFile = element.containingFile?.virtualFile ?: return
         if (rlsApi != null && session.getUserData(RLS_ANNOTATIONS_HANDLED) != true) {
-            println("RLS highlighing")
             session.putUserData(RLS_ANNOTATIONS_HANDLED, true)
             rlsApi.updateChangedFiles()
             applyRlsHighlighting(rlsApi.errorsForFile(vFile), holder)

@@ -10,9 +10,7 @@ import com.intellij.openapi.vfs.VirtualFile
  */
 interface RustLanguageServer {
     fun errorsForFile(file: VirtualFile): List<ErrorInfo>
-    fun updateChangedFiles() {
-
-    }
+    fun updateChangedFiles()
 }
 
 data class LineCol(val line: Int, val col: Int) {

@@ -21,6 +21,8 @@ class ContentLengthDelimitedProcessHandler(
     val callback: (String) -> Unit
 ) : OSProcessHandler(cmd) {
 
+    override fun useNonBlockingRead(): Boolean = false
+
     override fun createOutputDataReader(policy: BaseDataReader.SleepingPolicy) = object : BaseDataReader(policy) {
         private val stream = DataInputStream(myProcess.inputStream)
 
