@@ -16,6 +16,7 @@ import org.rust.lang.core.psi.ext.RsReferenceElement
 import org.rust.lang.core.psi.ext.descendantsOfType
 import org.rust.stdext.Timings
 import org.rust.openapiext.fullyRefreshDirectory
+import org.rust.stdext.WATCHES
 
 
 class RsHighlightingPerformanceTest : RustWithToolchainTestBase() {
@@ -56,8 +57,10 @@ class RsHighlightingPerformanceTest : RustWithToolchainTestBase() {
             myFixture.file.descendantsOfType<RsReferenceElement>()
         }
 
-        timings.measure("resolve") {
-            refs.forEach { it.reference.resolve() }
+        WATCHES.go {
+            timings.measure("resolve") {
+                refs.forEach { it.reference.resolve() }
+            }
         }
         timings.measure("highlighting") {
             myFixture.doHighlighting()

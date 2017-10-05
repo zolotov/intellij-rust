@@ -55,6 +55,7 @@ class Timings(
 interface RsWatch {
     val name: String
     val totalNs: AtomicLong
+    fun reset()
 }
 
 /**
@@ -83,6 +84,10 @@ class RsStopWatch(
         totalNs.addAndGet(measureNanoTime { result = block() })
         @Suppress("UNCHECKED_CAST")
         return result as T
+    }
+
+    override fun reset() {
+        totalNs.set(0)
     }
 }
 
@@ -114,6 +119,11 @@ class RsReentrantStopWatch(override val name: String) : RsWatch {
         @Suppress("UNCHECKED_CAST")
         return result as T
     }
+
+    override fun reset() {
+        totalNs.set(0)
+        check(nesting.get() == 0)
+    }
 }
 
 private class NestingCounter : ThreadLocal<Int>() {
@@ -130,22 +140,34 @@ private class NestingCounter : ThreadLocal<Int>() {
     }
 }
 
-private object WATCHES {
+object WATCHES {
     private val registered = ConcurrentHashMap.newKeySet<RsWatch>()
 
     init {
-        Runtime.getRuntime().addShutdownHook(object : Thread() {
-            override fun run() {
-                println("\nWatches:")
-                for (watch in registered.sortedBy { -it.totalNs.get() }) {
-                    val ms = watch.totalNs.get() / 1_000_000
-                    println("  ${ms.toString().padEnd(4)} ms ${watch.name}")
-                }
-            }
-        })
+//        Runtime.getRuntime().addShutdownHook(object : Thread() {
+//            override fun run() {
+//                println("\nWatches:")
+//                for (watch in registered.sortedBy { -it.totalNs.get() }) {
+//                    val ms = watch.totalNs.get() / 1_000_000
+//                    println("  ${ms.toString().padEnd(4)} ms ${watch.name}")
+//                }
+//            }
+//        })
     }
 
     operator fun plusAssign(watch: RsWatch) {
         registered += watch
+    }
+
+    fun go(block: () -> Unit) {
+        for (w in registered) {
+            w.reset()
+        }
+        block()
+        for (watch in registered.sortedBy { -it.totalNs.get() }) {
+            val ms = watch.totalNs.get() / 1_000_000
+            println("  ${ms.toString().padEnd(4)} ms ${watch.name}")
+        }
+        println()
     }
 }

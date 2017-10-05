@@ -19,6 +19,12 @@ import org.rust.lang.core.psi.ext.RsReferenceElement
 import org.rust.lang.core.psi.ext.elementType
 import org.rust.lang.core.types.BoundElement
 import org.rust.lang.refactoring.RsNamesValidator
+import org.rust.stdext.RsReentrantStopWatch
+
+val allResolve = RsReentrantStopWatch("allResolve").apply { start() }
+val libResolve = RsReentrantStopWatch("libResolve").apply { start() }
+val stdResolve = RsReentrantStopWatch("stdResolve").apply { start() }
+val thisResolve = RsReentrantStopWatch("thisResolve").apply { start() }
 
 abstract class RsReferenceBase<T : RsReferenceElement>(
     element: T
@@ -38,11 +44,38 @@ abstract class RsReferenceBase<T : RsReferenceElement>(
     final override fun multiResolve(): List<RsNamedElement> =
         advancedCachedMultiResolve().mapNotNull { it.element as? RsNamedElement }
 
-    override fun advancedCachedMultiResolve(): List<BoundElement<RsCompositeElement>> {
-        return ResolveCache.getInstance(element.project)
-            .resolveWithCaching(this, Resolver,
-                /* needToPreventRecursion = */ true,
-                /* incompleteCode = */ false).orEmpty()
+    final override fun advancedCachedMultiResolve(): List<BoundElement<RsCompositeElement>> {
+        val path = element.containingFile?.originalFile?.virtualFile?.path.orEmpty()
+
+        return allResolve.measure {
+            when {
+                ".cargo" in path -> libResolve.measure {
+                    ResolveCache.getInstance(element.project)
+                            .resolveWithCaching(this, Resolver,
+                                /* needToPreventRecursion = */ true,
+                                /* incompleteCode = */ false).orEmpty()
+                }
+
+                ".rustup" in path -> stdResolve.measure {
+                    ResolveCache.getInstance(element.project)
+                            .resolveWithCaching(this, Resolver,
+                                /* needToPreventRecursion = */ true,
+                                /* incompleteCode = */ false).orEmpty()
+                }
+
+                !path.endsWith("/resolver/mod.rs") -> thisResolve.measure {
+                    ResolveCache.getInstance(element.project)
+                        .resolveWithCaching(this, Resolver,
+                            /* needToPreventRecursion = */ true,
+                            /* incompleteCode = */ false).orEmpty()
+                }
+
+                else -> ResolveCache.getInstance(element.project)
+                        .resolveWithCaching(this, Resolver,
+                            /* needToPreventRecursion = */ true,
+                            /* incompleteCode = */ false).orEmpty()
+            }
+        }
     }
 
     abstract val T.referenceAnchor: PsiElement
