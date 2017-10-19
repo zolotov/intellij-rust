@@ -294,4 +294,20 @@ class RsClosuresResolveTest : RsResolveTestBase() {
             apply(|x| x, |x| x.foo().bar(), X);
         }                          //^
     """)
+
+    fun `test never type does not propagate inside other types`() = checkByCode("""
+        struct Spam;
+        impl Spam { fn eggs(&self) {} }
+                      //X
+
+        fn call<T, F: Fn() -> Option<T>>(f: F) -> Option<T> { f() }
+
+        fn foo(f: fn() -> Option<Spam>)  {
+            let x = match call(|| f()) {
+                Some(x) => x,
+                None => return,
+            };
+            x.eggs()
+        }    //^
+    """)
 }

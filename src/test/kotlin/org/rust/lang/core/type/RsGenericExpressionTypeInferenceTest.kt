@@ -1012,4 +1012,16 @@ class RsGenericExpressionTypeInferenceTest : RsTypificationTestBase() {
             Tr::foo(&a, 0);
         }             //^ u8
     """)
+
+    fun `test unify with never`() = testExpr("""
+        fn never() -> ! { unimplemented!() }
+        fn foo<T>(x: T, y: T) -> T { x }
+
+        struct S;
+
+        fn main() {
+            let x = foo(never(), S);
+            x
+        } //^ S
+    """)
 }
